@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Presensi Annuriyyah</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+	<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        
+        html, body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background-color: #f8fafc; 
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100%;
+            height: 100vh !important;
+            overflow: hidden !important;
+        }
+
+        #app-wrapper {
+            width: 100%;
+            height: 100vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        #app-wrapper::-webkit-scrollbar { width: 6px; }
+        #app-wrapper::-webkit-scrollbar-track { background: transparent; }
+        #app-wrapper::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        #app-wrapper::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .tab-active { border-bottom: 4px solid #059669; color: #059669; font-weight: 800; }
+        .hidden { display: none; }
+
+        /* ===== Cetak khusus tab REKAP ===== */
+        @media print {
+            body * { visibility: hidden; }
+            .printable-area, .printable-area * { visibility: visible; }
+            .printable-area { position: absolute; left: 0; top: 0; width: 100%; padding: 10mm; }
+            @page { size: A4 landscape; margin: 10mm; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app-wrapper">
+
+        <!-- HEADER / CLOCK -->
+        <nav class="bg-white border-b sticky top-0 z-50 px-4 py-3 shadow-sm">
+            <div class="container mx-auto flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-emerald-600 p-2 rounded-xl text-white"><i class="fas fa-clock text-xl"></i></div>
+                    <div>
+                        <h1 class="text-sm font-black text-emerald-900 leading-none">JAM SERVER</h1>
+                        <p id="serverClock" class="text-lg font-mono font-bold text-slate-700 tracking-tighter">00:00:00</p>
+                    </div>
+                </div>
+                <div class="flex space-x-2">
+                    <button onclick="changeView('user')" class="text-[10px] font-bold px-4 py-2 rounded-full border border-slate-200 uppercase">User</button>
+                    <button onclick="handleAdminLogin()" class="text-[10px] font-bold px-4 py-2 rounded-full bg-emerald-600 text-white uppercase shadow-lg shadow-emerald-100">Admin Panel</button>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container mx-auto p-4 max-w-5xl">
+
+            <!-- ================= VIEW USER ================= -->
+            <div id="viewUser" class="max-w-md mx-auto mt-6 bg-white rounded-[2rem] shadow-2xl p-8 border border-slate-100">
+                <div class="text-center mb-6">
+                    <div class="inline-block bg-emerald-100 p-4 rounded-full mb-3">
+                        <i class="fas fa-fingerprint text-4xl text-emerald-600"></i>
+                    </div>
+                    <h2 class="text-xl font-extrabold text-slate-800 tracking-tight">Formulir Kehadiran</h2>
+                    <p class="text-slate-400 text-xs">Pilihan sesi terkunci otomatis jika waktu habis</p>
+                </div>
+
+                <form id="formAbsen" class="space-y-4">
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase">Instansi</label>
+                        <select id="u_instansi" onchange="filterKaryawan()" class="w-full mt-1 p-3 bg-slate-50 border rounded-xl font-semibold" required>
+                            <option value="">Pilih Instansi...</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase">Nama Lengkap</label>
+                        <select id="u_nama" class="w-full mt-1 p-3 bg-slate-50 border rounded-xl font-semibold disabled:opacity-50" disabled required>
+                            <option value="">Pilih Nama...</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase">PIN Karyawan</label>
+                        <input type="password" id="u_pin" maxlength="6" pattern="\d{6}" inputmode="numeric" placeholder="••••••" class="w-full mt-1 p-3 bg-slate-50 border rounded-xl font-black text-center tracking-[1em] text-lg text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder:tracking-normal placeholder:text-sm placeholder:font-normal" required>
+                    </div>
+
+                    <div class="flex bg-slate-100 p-1 rounded-xl">
+                        <label class="flex-1 text-center py-2 rounded-lg cursor-pointer has-[:checked]:bg-white has-[:checked]:shadow-sm transition font-bold text-xs uppercase">
+                            <input type="radio" name="st" value="Hadir" checked class="hidden" onchange="onStatusChange(this.value)"> Hadir
+                        </label>
+                        <label class="flex-1 text-center py-2 rounded-lg cursor-pointer has-[:checked]:bg-white has-[:checked]:shadow-sm transition font-bold text-xs uppercase">
+                            <input type="radio" name="st" value="Sakit" class="hidden" onchange="onStatusChange(this.value)"> Sakit
+                        </label>
+                        <label class="flex-1 text-center py-2 rounded-lg cursor-pointer has-[:checked]:bg-white has-[:checked]:shadow-sm transition font-bold text-xs uppercase">
+                            <input type="radio" name="st" value="Izin" class="hidden" onchange="onStatusChange(this.value)"> Izin
+                        </label>
+                    </div>
+
+                    <div id="sesiSection">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase">Sesi &amp; Batas Jam</label>
+                        <select id="u_sesi" class="w-full mt-1 p-3 bg-slate-50 border rounded-xl font-bold text-emerald-700" required>
+                            <option value="">Pilih Sesi...</option>
+                        </select>
+                    </div>
+
+                    <!-- FOTO SELFIE -->
+                    <div class="p-3 border rounded-xl bg-slate-50">
+                        <label class="text-[10px] font-bold text-slate-500 uppercase italic">Foto Selfie (Wajib)</label>
+                        <div class="flex items-center gap-2 mt-2">
+                            <button type="button" onclick="openCamera('foto')" class="bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-bold shadow">
+                                <i class="fas fa-camera"></i> Ambil Foto
+                            </button>
+                            <span id="u_foto_status" class="text-[11px] text-slate-400 flex-1">Belum ada foto</span>
+                            <img id="u_foto_preview" class="hidden w-12 h-12 object-cover rounded-lg border">
+                        </div>
+                        <input type="file" id="u_foto_fallback" accept="image/*" capture="user" class="hidden">
+                    </div>
+
+                    <!-- DOKUMEN BUKTI -->
+                    <div id="docSection" class="hidden p-3 border border-amber-200 rounded-xl bg-amber-50">
+                        <label class="text-[10px] font-bold text-amber-600 uppercase italic">Bukti Sakit/Izin</label>
+                        <div class="flex items-center gap-2 mt-2 flex-wrap">
+                            <button type="button" onclick="openCamera('dokumen')" class="bg-amber-500 text-white px-3 py-2 rounded-lg text-xs font-bold shadow">
+                                <i class="fas fa-camera"></i> Foto
+                            </button>
+                            <button type="button" onclick="fallbackFileCapture('dokumen','upload')" class="bg-white border border-amber-300 text-amber-700 px-3 py-2 rounded-lg text-xs font-bold">
+                                <i class="fas fa-upload"></i> Upload File
+                            </button>
+                            <img id="u_dokumen_preview" class="hidden w-12 h-12 object-cover rounded-lg border">
+                        </div>
+                        <span id="u_dokumen_status" class="text-[11px] text-slate-400 mt-1 block">Belum ada dokumen</span>
+                        <input type="file" id="u_dokumen_fallback" accept="image/*" capture="environment" class="hidden">
+                        <input type="file" id="u_dokumen_upload" accept="image/*,application/pdf" class="hidden">
+                    </div>
+
+                    <!-- STATUS LOKASI -->
+                    <div class="flex items-center gap-2 text-[11px] text-slate-500 bg-slate-50 border rounded-xl p-3">
+                        <i class="fas fa-map-marker-alt text-emerald-600"></i>
+                        <span id="locStatus" class="flex-1">Menunggu lokasi...</span>
+                        <button type="button" onclick="initLocation()" class="text-emerald-600 font-bold underline text-[10px]">Coba Lagi</button>
+                    </div>
+
+                    <textarea id="u_ket" placeholder="Keterangan..." class="w-full p-3 bg-slate-50 border rounded-xl text-sm" rows="2"></textarea>
+
+                    <button type="submit" class="w-full bg-emerald-600 text-white font-bold py-4 rounded-2xl shadow-lg hover:bg-emerald-700 transition active:scale-95">
+                        KIRIM DATA SEKARANG
+                    </button>
+                </form>
+            </div>
+
+            <!-- ================= VIEW ADMIN ================= -->
+            <div id="viewAdmin" class="hidden mt-6">
+                <div class="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
+                    <div class="flex border-b bg-slate-50 overflow-x-auto">
+                        <button onclick="switchTab('tLogs')" id="btn-tLogs" class="px-6 py-4 text-xs font-bold tab-active">LAPORAN</button>
+                        <button onclick="switchTab('tIns')" id="btn-tIns" class="px-6 py-4 text-xs font-bold text-slate-400">INSTANSI</button>
+                        <button onclick="switchTab('tKar')" id="btn-tKar" class="px-6 py-4 text-xs font-bold text-slate-400">KARYAWAN</button>
+                        <button onclick="switchTab('tSes')" id="btn-tSes" class="px-6 py-4 text-xs font-bold text-slate-400">SESI</button>
+                        <button onclick="switchTab('tRekap')" id="btn-tRekap" class="px-6 py-4 text-xs font-bold text-slate-400">REKAP</button>
+                    </div>
+
+                    <div class="p-6">
+                        <!-- Tab Laporan -->
+                        <div id="tLogs" class="tab-content overflow-x-auto">
+                            <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-2">
+                                <h3 class="font-bold">Log Presensi</h3>
+                                <div class="flex gap-2 w-full md:w-auto flex-wrap">
+                                    <select id="filterLogInstansi" onchange="renderLogsTable()" class="text-[10px] border rounded px-2 py-1.5 font-bold bg-slate-50 flex-1 md:flex-none">
+                                        <option value="all">SEMUA INSTANSI</option>
+                                    </select>
+                                    <button onclick="exportExcel()" class="bg-slate-700 text-white px-3 py-1.5 rounded text-xs font-bold uppercase">Export Log</button>
+                                    <div class="flex flex-col gap-1 border-l pl-2">
+                                        <div class="flex gap-1">
+                                            <select id="exportBulan" class="text-[10px] border rounded px-1.5 py-1.5 font-bold bg-emerald-50 text-emerald-800">
+                                                <option value="1">Januari</option>
+                                                <option value="2">Februari</option>
+                                                <option value="3">Maret</option>
+                                                <option value="4">April</option>
+                                                <option value="5">Mei</option>
+                                                <option value="6">Juni</option>
+                                                <option value="7">Juli</option>
+                                                <option value="8">Agustus</option>
+                                                <option value="9">September</option>
+                                                <option value="10">Oktober</option>
+                                                <option value="11">November</option>
+                                                <option value="12">Desember</option>
+                                            </select>
+                                            <select id="exportTahun" class="text-[10px] border rounded px-1.5 py-1.5 font-bold bg-emerald-50 text-emerald-800">
+                                            </select>
+                                            <button onclick="exportRekapBulanan()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold uppercase shadow">
+                                                <i class="fas fa-file-excel"></i> Export Bulanan
+                                            </button>
+                                        </div>
+                                        <!-- FIX: Pilihan hari libur mingguan untuk perhitungan prosentase rekap -->
+                                        <div class="flex items-center gap-2 flex-wrap text-[9px] font-bold text-slate-500 uppercase">
+                                            <span>Libur:</span>
+                                            <label class="flex items-center gap-0.5"><input type="checkbox" class="hariLiburChk" value="1"> Sen</label>
+                                            <label class="flex items-center gap-0.5"><input type="checkbox" class="hariLiburChk" value="2"> Sel</label>
+                                            <label class="flex items-center gap-0.5"><input type="checkbox" class="hariLiburChk" value="3"> Rab</label>
+                                            <label class="flex items-center gap-0.5"><input type="checkbox" class="hariLiburChk" value="4"> Kam</label>
+                                            <label class="flex items-center gap-0.5"><input type="checkbox" class="hariLiburChk" value="5"> Jum</label>
+                                            <label class="flex items-center gap-0.5"><input type="checkbox" class="hariLiburChk" value="6"> Sab</label>
+                                            <label class="flex items-center gap-0.5"><input type="checkbox" class="hariLiburChk" value="0"> Min</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <table class="w-full text-[10px] border-collapse">
+                                <thead class="bg-slate-100 uppercase">
+                                    <tr>
+                                        <th class="p-2 border">Waktu</th>
+                                        <th class="p-2 border text-left">Nama</th>
+                                        <th class="p-2 border">Sesi</th>
+                                        <th class="p-2 border">Status</th>
+                                        <th class="p-2 border">Lokasi</th>
+                                        <th class="p-2 border">Foto</th>
+                                        <th class="p-2 border">Dok</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tblLogs" class="divide-y"></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Tab Instansi -->
+                        <div id="tIns" class="tab-content hidden">
+                            <div class="flex justify-between mb-4"><h3 class="font-bold">Master Instansi</h3><button onclick="addMaster('Master_Instansi')" class="bg-emerald-600 text-white px-3 py-1 rounded text-[10px] font-bold">+ TAMBAH</button></div>
+                            <table class="w-full text-sm border rounded-xl overflow-hidden">
+                                <thead class="bg-slate-50 text-[10px] font-bold uppercase">
+                                    <tr><th class="p-3 text-left">Nama Instansi</th><th class="p-3 text-center">Jumlah Karyawan</th><th class="p-3 text-right">Aksi</th></tr>
+                                </thead>
+                                <tbody id="tblIns"></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Tab Karyawan -->
+                        <div id="tKar" class="tab-content hidden">
+                            <div class="flex flex-col md:flex-row justify-between mb-4 gap-2">
+                                <h3 class="font-bold">Master Karyawan</h3>
+                                <div class="flex gap-2">
+                                    <select id="filterKarAdmin" onchange="renderKaryawanTable()" class="text-[10px] border rounded px-2 font-bold bg-slate-50">
+                                        <option value="all">SEMUA INSTANSI</option>
+                                    </select>
+                                    <button onclick="addMaster('Master_Karyawan')" class="bg-emerald-600 text-white px-3 py-1 rounded text-[10px] font-bold">+ TAMBAH</button>
+                                </div>
+                            </div>
+                            <table class="w-full text-sm border rounded-xl overflow-hidden">
+                                <thead class="bg-slate-50 text-[10px] font-bold uppercase">
+                                    <tr><th class="p-3 text-left">Instansi</th><th class="p-3 text-left">Nama Karyawan</th><th class="p-3 text-center">PIN</th><th class="p-3 text-right">Aksi</th></tr>
+                                </thead>
+                                <tbody id="tblKar"></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Tab Sesi -->
+                        <div id="tSes" class="tab-content hidden">
+                            <div class="flex justify-between mb-4"><h3 class="font-bold">Pengaturan Sesi</h3><button onclick="addMaster('Master_Sesi')" class="bg-emerald-600 text-white px-3 py-1 rounded text-[10px] font-bold">+ TAMBAH</button></div>
+                            <table class="w-full text-sm border rounded-xl overflow-hidden">
+                                <thead class="bg-slate-50 text-[10px] font-bold uppercase">
+                                    <tr><th class="p-3 text-left">Nama Sesi</th><th class="p-3 text-center">Waktu</th><th class="p-3 text-right">Aksi</th></tr>
+                                </thead>
+                                <tbody id="tblSes"></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Tab Rekap (Laporan Bulanan + Chart) -->
+                        <div id="tRekap" class="tab-content hidden">
+                            <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-2">
+                                <h3 class="font-bold">Rekap &amp; Laporan Bulanan</h3>
+                                <div class="flex gap-2 w-full md:w-auto flex-wrap items-center">
+                                    <select id="rekapInstansi" class="text-[10px] border rounded px-2 py-1.5 font-bold bg-slate-50 flex-1 md:flex-none">
+                                        <option value="">Pilih Instansi...</option>
+                                    </select>
+                                    <select id="rekapBulan" class="text-[10px] border rounded px-1.5 py-1.5 font-bold bg-emerald-50 text-emerald-800">
+                                        <option value="1">Januari</option>
+                                        <option value="2">Februari</option>
+                                        <option value="3">Maret</option>
+                                        <option value="4">April</option>
+                                        <option value="5">Mei</option>
+                                        <option value="6">Juni</option>
+                                        <option value="7">Juli</option>
+                                        <option value="8">Agustus</option>
+                                        <option value="9">September</option>
+                                        <option value="10">Oktober</option>
+                                        <option value="11">November</option>
+                                        <option value="12">Desember</option>
+                                    </select>
+                                    <select id="rekapTahun" class="text-[10px] border rounded px-1.5 py-1.5 font-bold bg-emerald-50 text-emerald-800"></select>
+                                    <div class="flex items-center gap-1.5 flex-wrap text-[9px] font-bold text-slate-500 uppercase border-l pl-2">
+                                        <span>Libur:</span>
+                                        <label class="flex items-center gap-0.5"><input type="checkbox" class="rekapLiburChk" value="1"> Sen</label>
+                                        <label class="flex items-center gap-0.5"><input type="checkbox" class="rekapLiburChk" value="2"> Sel</label>
+                                        <label class="flex items-center gap-0.5"><input type="checkbox" class="rekapLiburChk" value="3"> Rab</label>
+                                        <label class="flex items-center gap-0.5"><input type="checkbox" class="rekapLiburChk" value="4"> Kam</label>
+                                        <label class="flex items-center gap-0.5"><input type="checkbox" class="rekapLiburChk" value="5"> Jum</label>
+                                        <label class="flex items-center gap-0.5"><input type="checkbox" class="rekapLiburChk" value="6"> Sab</label>
+                                        <label class="flex items-center gap-0.5"><input type="checkbox" class="rekapLiburChk" value="0"> Min</label>
+                                    </div>
+                                    <button onclick="tampilkanRekap()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs font-bold uppercase shadow">
+                                        <i class="fas fa-chart-column"></i> Tampilkan
+                                    </button>
+                                    <button id="btnCetakRekap" onclick="window.print()" class="hidden bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded text-xs font-bold uppercase shadow">
+                                        <i class="fas fa-print"></i> Cetak / PDF
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="rekapEmpty" class="text-center text-slate-400 text-xs py-16 border-2 border-dashed rounded-2xl">
+                                Pilih instansi, bulan, dan tahun lalu klik <b>Tampilkan</b> untuk melihat rekap &amp; grafik.
+                            </div>
+
+                            <div id="rekapContent" class="hidden printable-area">
+                                <div class="flex justify-between items-start border-b-2 border-emerald-700 pb-3 mb-4">
+                                    <div>
+                                        <h2 class="text-emerald-800 font-black text-lg leading-none">Laporan Presensi Bulanan</h2>
+                                        <p id="rekapSubInfo" class="text-xs text-slate-500 mt-1"></p>
+                                    </div>
+                                    <p id="rekapPrintedAt" class="text-[10px] text-slate-400"></p>
+                                </div>
+
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                                    <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+                                        <div id="kpiHadir" class="text-xl font-black text-emerald-700">0</div>
+                                        <div class="text-[10px] uppercase font-bold text-slate-500 mt-1">Total Hadir</div>
+                                    </div>
+                                    <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+                                        <div id="kpiSakit" class="text-xl font-black text-amber-600">0</div>
+                                        <div class="text-[10px] uppercase font-bold text-slate-500 mt-1">Total Sakit</div>
+                                    </div>
+                                    <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+                                        <div id="kpiIzin" class="text-xl font-black text-blue-600">0</div>
+                                        <div class="text-[10px] uppercase font-bold text-slate-500 mt-1">Total Izin</div>
+                                    </div>
+                                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                                        <div id="kpiRata" class="text-xl font-black text-slate-700">0%</div>
+                                        <div class="text-[10px] uppercase font-bold text-slate-500 mt-1">Rata-rata Kehadiran</div>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                    <div class="border rounded-xl p-3">
+                                        <h4 class="text-xs font-bold mb-2">Distribusi Status Kehadiran</h4>
+                                        <canvas id="chartPie" height="220"></canvas>
+                                    </div>
+                                    <div class="border rounded-xl p-3">
+                                        <h4 class="text-xs font-bold mb-2">Persentase Kehadiran per Karyawan</h4>
+                                        <canvas id="chartBar" height="220"></canvas>
+                                    </div>
+                                    <div class="border rounded-xl p-3 md:col-span-2">
+                                        <h4 class="text-xs font-bold mb-2">Tren Kehadiran Harian</h4>
+                                        <canvas id="chartLine" height="120"></canvas>
+                                    </div>
+                                </div>
+
+                                <h4 class="text-xs font-bold text-emerald-800 border-l-4 border-emerald-700 pl-2 mb-2">Rekap Detail per Karyawan</h4>
+                                <table class="w-full text-[11px] border-collapse">
+                                    <thead class="bg-emerald-700 text-white uppercase">
+                                        <tr>
+                                            <th class="p-2 border">No</th>
+                                            <th class="p-2 border text-left">Nama</th>
+                                            <th class="p-2 border">Hadir</th>
+                                            <th class="p-2 border">Sakit</th>
+                                            <th class="p-2 border">Izin</th>
+                                            <th class="p-2 border">Hari Kerja</th>
+                                            <th class="p-2 border">Persentase</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="rekapTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= MODAL KAMERA LIVE ================= -->
+        <div id="cameraModal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl overflow-hidden max-w-sm w-full">
+                <div class="relative bg-black">
+                    <video id="cameraVideo" autoplay playsinline class="w-full h-72 object-cover"></video>
+                    <canvas id="cameraCanvas" class="hidden"></canvas>
+                </div>
+                <div class="p-4 flex justify-between gap-2">
+                    <button type="button" onclick="closeCamera()" class="flex-1 py-3 rounded-xl bg-slate-100 font-bold text-xs uppercase">Batal</button>
+                    <button type="button" onclick="capturePhoto()" class="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-bold text-xs uppercase">
+                        <i class="fas fa-camera"></i> Jepret
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div> <!-- AKHIR DARI APP-WRAPPER -->
+
+    <script>
+    // ================= STATE GLOBAL =================
+    let db = { instansi: [], karyawan: [], sesi: [], logs: [] };
+    let isAdmin = false;
+    let capturedPhotoB64 = null;
+    let capturedDocB64 = null;
+    let cameraStream = null;
+    let cameraTarget = null;
+    let currentLocation = null;
+
+    // ================= JAM & INIT =================
+    setInterval(() => {
+        document.getElementById('serverClock').innerText = new Date().toLocaleTimeString('id-ID');
+    }, 1000);
+
+    window.onload = function() {
+        // FIX: Isi dropdown tahun secara dinamis (tahun ini + 2 tahun ke depan)
+        const tahunSelect = document.getElementById('exportTahun');
+        const tahunSekarang = new Date().getFullYear();
+        for (let y = tahunSekarang - 1; y <= tahunSekarang + 2; y++) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = y;
+            if (y === tahunSekarang) opt.selected = true;
+            tahunSelect.appendChild(opt);
+        }
+
+        // FIX: Set bulan dropdown ke bulan sekarang
+        document.getElementById('exportBulan').value = new Date().getMonth() + 1;
+
+        // Isi dropdown tahun untuk tab REKAP (sama seperti exportTahun)
+        const rekapTahunSelect = document.getElementById('rekapTahun');
+        for (let y = tahunSekarang - 1; y <= tahunSekarang + 2; y++) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = y;
+            if (y === tahunSekarang) opt.selected = true;
+            rekapTahunSelect.appendChild(opt);
+        }
+        document.getElementById('rekapBulan').value = new Date().getMonth() + 1;
+
+        refreshData();
+        initLocation();
+    };
+
+    function refreshData() {
+        google.script.run.withSuccessHandler(data => {
+            db = data;
+            renderUI();
+        }).withFailureHandler(err => {
+            console.error('Gagal memuat data:', err);
+        }).getAllAppData();
+    }
+
+    // ================= FUNGSI KOMPRESI GAMBAR =================
+    function compressImage(dataUrl, maxSizeKB, callback) {
+        const sizeInKB = Math.round((dataUrl.length * 3 / 4) - 2) / 1024;
+        if (sizeInKB <= maxSizeKB) { callback(dataUrl); return; }
+
+        const img = new Image();
+        img.src = dataUrl;
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            let maxDim = 1080;
+            let width = img.width, height = img.height;
+            if (width > maxDim || height > maxDim) {
+                if (width > height) { height = Math.round(height * (maxDim / width)); width = maxDim; }
+                else { width = Math.round(width * (maxDim / height)); height = maxDim; }
+            }
+            canvas.width = width; canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+
+            let quality = 0.8;
+            let newDataUrl = canvas.toDataURL('image/jpeg', quality);
+            let newSize = Math.round((newDataUrl.length * 3 / 4) - 2) / 1024;
+            while (newSize > maxSizeKB && quality > 0.1) {
+                quality -= 0.1;
+                newDataUrl = canvas.toDataURL('image/jpeg', quality);
+                newSize = Math.round((newDataUrl.length * 3 / 4) - 2) / 1024;
+            }
+            callback(newDataUrl);
+        };
+        // FIX: Tambah handler error jika gambar gagal di-load
+        img.onerror = function() { callback(dataUrl); };
+    }
+
+    // ================= KAMERA =================
+    function openCamera(target) {
+        cameraTarget = target;
+        const facing = target === 'foto' ? 'user' : 'environment';
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            fallbackFileCapture(target, 'camera');
+            return;
+        }
+
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio: false })
+            .then(stream => {
+                cameraStream = stream;
+                const video = document.getElementById('cameraVideo');
+                video.srcObject = stream;
+                document.getElementById('cameraModal').classList.remove('hidden');
+            })
+            .catch(() => {
+                Swal.fire({ icon: 'warning', title: 'Izin Kamera Ditolak', text: 'Membuka kamera perangkat sebagai alternatif...', timer: 1800, showConfirmButton: false });
+                fallbackFileCapture(target, 'camera');
+            });
+    }
+
+    function closeCamera() {
+        if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+        document.getElementById('cameraModal').classList.add('hidden');
+    }
+
+    function capturePhoto() {
+        const video = document.getElementById('cameraVideo');
+        const canvas = document.getElementById('cameraCanvas');
+        // FIX: Pastikan video sudah siap sebelum capture
+        if (!video.videoWidth || !video.videoHeight) {
+            Swal.fire('Tunggu', 'Kamera belum siap, coba lagi.', 'warning');
+            return;
+        }
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+
+        Swal.fire({ title: 'Memproses Foto...', text: 'Mengoptimalkan ukuran...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        compressImage(dataUrl, 200, function(compressed) {
+            Swal.close();
+            if (cameraTarget === 'foto') {
+                capturedPhotoB64 = compressed;
+                setPreview('u_foto', compressed, 'Foto berhasil diambil ✔');
+            } else {
+                capturedDocB64 = compressed;
+                setPreview('u_dokumen', compressed, 'Dokumen berhasil difoto ✔');
+            }
+            closeCamera();
+        });
+    }
+
+    // FIX: setPreview aman untuk elemen yang mungkin null
+    function setPreview(prefix, dataUrl, statusText) {
+        const img = document.getElementById(prefix + '_preview');
+        const status = document.getElementById(prefix + '_status');
+        // Hanya tampilkan preview gambar jika dataUrl adalah gambar (bukan PDF)
+        if (img) {
+            if (dataUrl && dataUrl.startsWith('data:image')) {
+                img.src = dataUrl;
+                img.classList.remove('hidden');
+            } else {
+                img.classList.add('hidden');
+            }
+        }
+        if (status) status.innerText = statusText;
+    }
+
+    function fallbackFileCapture(target, mode) {
+        const inputId = target === 'foto' ? 'u_foto_fallback' : (mode === 'upload' ? 'u_dokumen_upload' : 'u_dokumen_fallback');
+        const input = document.getElementById(inputId);
+        input.value = '';
+        input.onchange = function() {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function() {
+                if (file.type.startsWith('image/') && (file.size / 1024) > 200) {
+                    Swal.fire({ title: 'Kompresi Berkas...', text: 'Mengecilkan ukuran file...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                    compressImage(reader.result, 200, function(compressed) {
+                        Swal.close();
+                        handleFileSelection(target, file, compressed);
+                    });
+                } else {
+                    handleFileSelection(target, file, reader.result);
+                }
+            };
+            reader.readAsDataURL(file);
+        };
+        input.click();
+    }
+
+    function handleFileSelection(target, file, base64Data) {
+        if (target === 'foto') {
+            capturedPhotoB64 = base64Data;
+            // FIX: Jangan tampilkan preview PDF sebagai gambar
+            setPreview('u_foto', file.type.startsWith('image/') ? base64Data : '', 'File terpilih: ' + file.name);
+            document.getElementById('u_foto_status').innerText = 'File terpilih: ' + file.name;
+        } else {
+            capturedDocB64 = base64Data;
+            if (file.type.startsWith('image/')) {
+                setPreview('u_dokumen', base64Data, 'File: ' + file.name);
+            } else {
+                // FIX: Untuk PDF tampilkan ikon khusus, preview disembunyikan
+                const img = document.getElementById('u_dokumen_preview');
+                if (img) img.classList.add('hidden');
+                const status = document.getElementById('u_dokumen_status');
+                if (status) status.innerText = '📄 PDF terpilih: ' + file.name;
+            }
+        }
+    }
+
+    // ================= LOKASI & JARAK =================
+    function initLocation() {
+        const statusEl = document.getElementById('locStatus');
+        statusEl.innerText = 'Meminta izin lokasi GPS...';
+        if (!navigator.geolocation) { statusEl.innerText = 'GPS tidak didukung...'; getIpLocation(); return; }
+        navigator.geolocation.getCurrentPosition(
+            pos => {
+                const lat = pos.coords.latitude.toFixed(6);
+                const lng = pos.coords.longitude.toFixed(6);
+                currentLocation = { lat, lng, source: 'gps', text: `GPS Akurat: ${lat}, ${lng}` };
+                statusEl.innerText = currentLocation.text;
+            },
+            () => { statusEl.innerText = 'Izin GPS ditolak, mengambil perkiraan lokasi...'; getIpLocation(); },
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        );
+    }
+
+    function getIpLocation() {
+        const statusEl = document.getElementById('locStatus');
+        fetch('https://ipwho.is/')
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.success !== false) {
+                    currentLocation = { lat: data.latitude, lng: data.longitude, source: 'ip', text: `Perkiraan (IP): ${data.city || ''}, ${data.region || ''}` };
+                } else {
+                    currentLocation = { lat: '', lng: '', source: 'none', text: 'Lokasi tidak tersedia' };
+                }
+                statusEl.innerText = currentLocation.text;
+            })
+            .catch(() => {
+                currentLocation = { lat: '', lng: '', source: 'none', text: 'Lokasi tidak tersedia' };
+                statusEl.innerText = currentLocation.text;
+            });
+    }
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371e3;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    // ================= UTILS & UI RENDER =================
+    function checkIsExpired(limitTimeStr) {
+        const now = new Date();
+        const [h, m] = limitTimeStr.replace('.', ':').split(':').map(Number);
+        const limit = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 59);
+        return now > limit;
+    }
+
+    function populateSesi() {
+        const select = document.getElementById('u_sesi');
+        const status = document.querySelector('input[name="st"]:checked').value;
+        select.innerHTML = '<option value="">Pilih Sesi...</option>';
+        let count = 0;
+        db.sesi.forEach(r => {
+            const expired = checkIsExpired(r[2]);
+            const label = `${r[0]} (${r[1]} - ${r[2]})`;
+            if (status === 'Hadir') {
+                if (!expired) { select.innerHTML += `<option value="${label}">${label}</option>`; count++; }
+            } else { select.innerHTML += `<option value="${label}">${label}</option>`; count++; }
+        });
+        if (count === 0 && status === 'Hadir') {
+            select.innerHTML = '<option value="EXPIRED" disabled selected>MAAF, WAKTU ABSEN HADIR HABIS</option>';
+        }
+    }
+
+    function renderUI() {
+        const ins = document.getElementById('u_instansi');
+        const fAdmin = document.getElementById('filterKarAdmin');
+        const fLog = document.getElementById('filterLogInstansi');
+        const rIns = document.getElementById('rekapInstansi');
+
+        // FIX: Simpan nilai filter yang sedang dipilih agar tidak reset saat refresh
+        const prevFAdmin = fAdmin.value;
+        const prevFLog = fLog.value;
+        const prevRIns = rIns.value;
+
+        ins.innerHTML = '<option value="">Pilih Instansi...</option>';
+        fAdmin.innerHTML = '<option value="all">SEMUA INSTANSI</option>';
+        fLog.innerHTML = '<option value="all">SEMUA INSTANSI</option>';
+        rIns.innerHTML = '<option value="">Pilih Instansi...</option>';
+
+        db.instansi.forEach(r => {
+            ins.innerHTML += `<option value="${r[0]}">${r[0]}</option>`;
+            fAdmin.innerHTML += `<option value="${r[0]}">${r[0]}</option>`;
+            fLog.innerHTML += `<option value="${r[0]}">${r[0]}</option>`;
+            rIns.innerHTML += `<option value="${r[0]}">${r[0]}</option>`;
+        });
+
+        // FIX: Kembalikan nilai filter setelah render
+        if (prevFAdmin) fAdmin.value = prevFAdmin;
+        if (prevFLog) fLog.value = prevFLog;
+        if (prevRIns) rIns.value = prevRIns;
+
+        populateSesi();
+        renderLogsTable();
+        renderInstansiTable();
+        renderKaryawanTable();
+        renderSesiTable();
+    }
+
+    function renderLogsTable() {
+        const filterVal = document.getElementById('filterLogInstansi').value;
+        const list = filterVal === 'all' ? db.logs : db.logs.filter(r => r[1] === filterVal);
+        document.getElementById('tblLogs').innerHTML = list.map(r => `
+            <tr>
+                <td class="p-2 border">${r[0]}</td>
+                <td class="p-2 border font-bold">${r[2]}</td>
+                <td class="p-2 border text-center">${r[3]}</td>
+                <td class="p-2 border text-center font-black">${r[4]}</td>
+                <td class="p-2 border text-center text-[10px]">${r[6] || '-'}</td>
+                <td class="p-2 border text-center">${r[7] ? `<a href="${r[7]}" target="_blank" class="text-blue-500 font-bold">LIHAT</a>` : '-'}</td>
+                <td class="p-2 border text-center">${r[8] ? `<a href="${r[8]}" target="_blank" class="text-blue-500 font-bold">LIHAT</a>` : '-'}</td>
+            </tr>
+        `).join('');
+    }
+
+    function renderInstansiTable() {
+        const counts = db.karyawan.reduce((a, k) => { a[k[0]] = (a[k[0]] || 0) + 1; return a; }, {});
+        document.getElementById('tblIns').innerHTML = db.instansi.map(r => `
+            <tr class="border-b last:border-0 hover:bg-slate-50 transition">
+                <td class="p-3 font-bold">${r[0]}</td>
+                <td class="p-3 text-center"><span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-black">${counts[r[0]] || 0} ORANG</span></td>
+                <td class="p-3 text-right"><button onclick="delMaster('Master_Instansi', ${JSON.stringify(r).replace(/"/g, '&quot;')})" class="text-red-300 hover:text-red-600"><i class="fas fa-trash-alt"></i></button></td>
+            </tr>
+        `).join('');
+    }
+
+    function renderKaryawanTable() {
+        const filterVal = document.getElementById('filterKarAdmin').value;
+        const list = filterVal === 'all' ? db.karyawan : db.karyawan.filter(k => k[0] === filterVal);
+        document.getElementById('tblKar').innerHTML = list.map(r => `
+            <tr class="border-b last:border-0 hover:bg-slate-50 transition">
+                <td class="p-3 text-[10px] font-black text-slate-400 uppercase tracking-tighter">${r[0]}</td>
+                <td class="p-3 font-bold">${r[1]}</td>
+                <td class="p-3 text-center font-mono font-bold text-emerald-600 tracking-widest bg-emerald-50/50">${r[2] || 'KOSONG'}</td>
+                <td class="p-3 text-right whitespace-nowrap">
+                    <button onclick="generatePin(${JSON.stringify(r).replace(/"/g, '&quot;')})" class="text-amber-500 hover:text-amber-600 bg-amber-50 px-2 py-1 rounded mr-1 text-xs" title="Generate PIN Baru"><i class="fas fa-key"></i> PIN</button>
+                    <button onclick="delMaster('Master_Karyawan', ${JSON.stringify(r).replace(/"/g, '&quot;')})" class="text-red-300 hover:text-red-600 bg-red-50 px-2 py-1 rounded text-xs"><i class="fas fa-trash-alt"></i></button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function renderSesiTable() {
+        document.getElementById('tblSes').innerHTML = db.sesi.map(r => `
+            <tr class="border-b last:border-0 hover:bg-slate-50 transition">
+                <td class="p-3 font-bold">${r[0]}</td>
+                <td class="p-3 text-center text-slate-500 font-mono text-xs">${r[1]} - ${r[2]}</td>
+                <td class="p-3 text-right"><button onclick="delMaster('Master_Sesi', ${JSON.stringify(r).replace(/"/g, '&quot;')})" class="text-red-300 hover:text-red-600"><i class="fas fa-trash-alt"></i></button></td>
+            </tr>
+        `).join('');
+    }
+
+    // ================= EVENT HANDLERS & FORM SUBMIT =================
+    function onStatusChange(v) {
+        document.getElementById('docSection').classList.toggle('hidden', v === 'Hadir');
+        const sesiSection = document.getElementById('sesiSection');
+        const uSesi = document.getElementById('u_sesi');
+        if (v !== 'Hadir') {
+            sesiSection.classList.add('hidden');
+            uSesi.removeAttribute('required');
+            uSesi.value = '';
+        } else {
+            sesiSection.classList.remove('hidden');
+            uSesi.setAttribute('required', 'required');
+        }
+        // FIX: Reset dokumen saat kembali ke Hadir agar tidak tersimpan state lama
+        if (v === 'Hadir') {
+            capturedDocB64 = null;
+            const prevImg = document.getElementById('u_dokumen_preview');
+            if (prevImg) prevImg.classList.add('hidden');
+        }
+        populateSesi();
+    }
+
+    function filterKaryawan() {
+        const val = document.getElementById('u_instansi').value;
+        const nama = document.getElementById('u_nama');
+        const list = db.karyawan.filter(k => k[0] === val);
+        nama.innerHTML = '<option value="">Pilih Nama...</option>';
+        if (list.length > 0) {
+            nama.disabled = false;
+            list.forEach(k => nama.innerHTML += `<option value="${k[1]}">${k[1]}</option>`);
+        } else {
+            nama.disabled = true;
+        }
+    }
+
+    document.getElementById('formAbsen').onsubmit = async function(e) {
+        e.preventDefault();
+        const status = document.querySelector('input[name="st"]:checked').value;
+        const sesiVal = document.getElementById('u_sesi').value;
+
+        if (status === 'Hadir') {
+            if (!sesiVal || sesiVal === 'EXPIRED') { Swal.fire('Terlambat!', 'Waktu absensi sudah ditutup.', 'error'); return; }
+            const namaSesi = sesiVal.split(' (')[0];
+            const match = db.sesi.find(s => s[0] === namaSesi);
+            if (match && checkIsExpired(match[2])) { Swal.fire('Waktu Habis!', 'Batas sesi baru saja berakhir.', 'error'); populateSesi(); return; }
+        }
+
+        // FIX: Validasi PIN — harus terisi dan 6 digit angka
+        const pinVal = document.getElementById('u_pin').value;
+        if (!pinVal || !/^\d{6}$/.test(pinVal)) {
+            Swal.fire('PIN Tidak Valid', 'Masukkan PIN 6 digit angka.', 'warning');
+            return;
+        }
+
+        if (!capturedPhotoB64) { Swal.fire('Wajib!', 'Silakan ambil foto selfie terlebih dahulu.', 'warning'); return; }
+        if (status !== 'Hadir' && !capturedDocB64) { Swal.fire('Wajib!', 'Silakan lampirkan bukti sakit/izin (foto atau file).', 'warning'); return; }
+
+        // ====== VALIDASI JARAK ======
+        const TARGET_LAT = -8.200085051175078;
+        const TARGET_LNG = 113.6240749503121;
+        const MAX_RADIUS = 750;
+
+        if (status === 'Hadir') {
+            if (!currentLocation || !currentLocation.lat) {
+                Swal.fire('Lokasi Gagal', 'Sistem tidak dapat mendeteksi lokasi Anda. Pastikan GPS aktif.', 'error');
+                return;
+            }
+            if (currentLocation.source !== 'gps') {
+                Swal.fire('GPS Tidak Aktif', 'Absen Hadir wajib menggunakan GPS asli perangkat. Izinkan akses lokasi di browser Anda.', 'error');
+                return;
+            }
+            const distance = calculateDistance(TARGET_LAT, TARGET_LNG, currentLocation.lat, currentLocation.lng);
+            if (distance > MAX_RADIUS) {
+                Swal.fire('Di Luar Jangkauan!', `Anda berada ${Math.round(distance)} meter dari lokasi sekolah.\nMaksimal jarak yang diizinkan adalah ${MAX_RADIUS} meter.`, 'error');
+                return;
+            }
+        }
+        // ============================
+
+        Swal.fire({ title: 'Memproses...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+        try {
+            const payload = {
+                instansi: document.getElementById('u_instansi').value,
+                nama: document.getElementById('u_nama').value,
+                pin: pinVal,
+                sesi: sesiVal,
+                status: status,
+                ket: document.getElementById('u_ket').value,
+                foto: capturedPhotoB64,
+                dokumen: capturedDocB64,
+                lokasi: currentLocation ? currentLocation.text : 'Lokasi tidak tersedia',
+                lat: currentLocation ? currentLocation.lat : '',
+                lng: currentLocation ? currentLocation.lng : ''
+            };
+            google.script.run
+                .withSuccessHandler(res => {
+                    if (res.status === 'success') {
+                        Swal.fire('Berhasil!', 'Data presensi tersimpan.', 'success');
+                        // FIX: Reset form secara menyeluruh
+                        document.getElementById('formAbsen').reset();
+                        capturedPhotoB64 = null;
+                        capturedDocB64 = null;
+                        document.getElementById('u_foto_preview').classList.add('hidden');
+                        document.getElementById('u_dokumen_preview').classList.add('hidden');
+                        document.getElementById('u_foto_status').innerText = 'Belum ada foto';
+                        // FIX: u_dokumen_status aman diakses (elemen ada di HTML)
+                        const docStatus = document.getElementById('u_dokumen_status');
+                        if (docStatus) docStatus.innerText = 'Belum ada dokumen';
+                        // Reset radio ke Hadir
+                        document.querySelector('input[name="st"][value="Hadir"]').checked = true;
+                        onStatusChange('Hadir');
+                        // Reset dropdown nama
+                        document.getElementById('u_nama').innerHTML = '<option value="">Pilih Nama...</option>';
+                        document.getElementById('u_nama').disabled = true;
+                        refreshData();
+                    } else {
+                        Swal.fire('Gagal!', res.msg, 'error');
+                    }
+                })
+                .withFailureHandler(err => {
+                    Swal.fire('Error Server', err.toString(), 'error');
+                })
+                .submitAbsensi(payload);
+        } catch (e) {
+            Swal.fire('Error', 'Gagal memproses data: ' + e.message, 'error');
+        }
+    };
+
+    // ================= CRUD ADMIN =================
+    function addMaster(sheet) {
+        if (sheet === 'Master_Sesi') {
+            Swal.fire({
+                title: 'Tambah Sesi',
+                html: `<input id="sw-n" class="swal2-input" placeholder="Nama Sesi (contoh: Pagi)">
+                       <label style="font-size:12px;color:#64748b">Jam Mulai</label>
+                       <input id="sw-m" type="time" class="swal2-input">
+                       <label style="font-size:12px;color:#64748b">Jam Selesai</label>
+                       <input id="sw-s" type="time" class="swal2-input">`,
+                preConfirm: () => {
+                    const n = document.getElementById('sw-n').value.trim();
+                    const m = document.getElementById('sw-m').value;
+                    const s = document.getElementById('sw-s').value;
+                    if (!n || !m || !s) { Swal.showValidationMessage('Semua kolom wajib diisi!'); return false; }
+                    return [n, m, s];
+                }
+            }).then(res => { if (res.value) runCrud('add', sheet, res.value); });
+        } else if (sheet === 'Master_Karyawan') {
+            let opts = {};
+            db.instansi.forEach(r => opts[r[0]] = r[0]);
+            Swal.fire({ title: 'Pilih Instansi', input: 'select', inputOptions: opts, inputPlaceholder: 'Pilih instansi...' }).then(r1 => {
+                if (r1.value) {
+                    Swal.fire({ title: 'Nama Karyawan', input: 'text', inputPlaceholder: 'Masukkan nama lengkap' }).then(r2 => {
+                        if (r2.value && r2.value.trim()) {
+                            const initPin = Math.floor(100000 + Math.random() * 900000).toString();
+                            Swal.fire({ icon: 'info', title: 'PIN Awal Karyawan', html: `PIN otomatis untuk <b>${r2.value.trim()}</b>:<br><div class="text-3xl font-mono font-black text-emerald-600 py-2 tracking-widest">${initPin}</div><small>Catat PIN ini untuk diberikan ke karyawan.</small>` });
+                            runCrud('add', sheet, [r1.value, r2.value.trim(), initPin]);
+                        }
+                    });
+                }
+            });
+        } else {
+            Swal.fire({ title: 'Tambah Instansi', input: 'text', inputPlaceholder: 'Nama instansi' }).then(res => {
+                if (res.value && res.value.trim()) runCrud('add', sheet, [res.value.trim()]);
+            });
+        }
+    }
+
+    function generatePin(row) {
+        const newPin = Math.floor(100000 + Math.random() * 900000).toString();
+        Swal.fire({
+            title: 'Generate PIN Baru',
+            html: `Buat ulang PIN absensi untuk <b>${row[1]}</b>?<br><br><div class="bg-emerald-50 text-emerald-700 text-3xl font-mono font-black py-3 rounded-xl tracking-[0.3em]">${newPin}</div>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#059669',
+            confirmButtonText: 'Ya, Simpan',
+            cancelButtonText: 'Batal'
+        }).then(res => {
+            if (res.isConfirmed) {
+                // FIX: Panggil refreshData setelah update PIN agar tabel langsung terupdate
+                google.script.run
+                    .withSuccessHandler(() => {
+                        refreshData();
+                        Swal.fire('Berhasil', `PIN karyawan ${row[1]} sudah diperbarui menjadi: ${newPin}`, 'success');
+                    })
+                    .withFailureHandler(err => Swal.fire('Error', err.toString(), 'error'))
+                    .crudMaster('update_pin', 'Master_Karyawan', [row[0], row[1], newPin]);
+            }
+        });
+    }
+
+    function delMaster(sh, dt) {
+        Swal.fire({ title: 'Hapus Data?', text: 'Data yang dihapus tidak bisa dikembalikan.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#dc2626', confirmButtonText: 'Ya, Hapus', cancelButtonText: 'Batal' })
+            .then(r => { if (r.isConfirmed) runCrud('delete', sh, dt); });
+    }
+
+    function runCrud(act, sh, dt) {
+        google.script.run
+            .withSuccessHandler(() => refreshData())
+            .withFailureHandler(err => Swal.fire('Error', err.toString(), 'error'))
+            .crudMaster(act, sh, dt);
+    }
+
+    function handleAdminLogin() {
+        if (isAdmin) return changeView('admin');
+        Swal.fire({ title: 'Password Admin', input: 'password', inputPlaceholder: 'Masukkan password' }).then(res => {
+            if (res.value) {
+                google.script.run
+                    .withSuccessHandler(v => {
+                        if (v) { isAdmin = true; changeView('admin'); }
+                        else Swal.fire('Gagal', 'Password salah!', 'error');
+                    })
+                    .verifyAdmin(res.value);
+            }
+        });
+    }
+
+    function changeView(v) {
+        document.getElementById('viewUser').classList.toggle('hidden', v !== 'user');
+        document.getElementById('viewAdmin').classList.toggle('hidden', v !== 'admin');
+    }
+
+    function switchTab(t) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+        document.getElementById(t).classList.remove('hidden');
+        document.querySelectorAll('[id^="btn-t"]').forEach(b => b.classList.remove('tab-active'));
+        document.getElementById('btn-' + t).classList.add('tab-active');
+    }
+
+    // ================= EXPORT =================
+    function exportRekapBulanan() {
+        const instansiTarget = document.getElementById('filterLogInstansi').value;
+        const bulan = document.getElementById('exportBulan').value;
+        const tahun = document.getElementById('exportTahun').value;
+        // FIX: Ambil hari libur mingguan yang dicentang (0=Minggu ... 6=Sabtu)
+        const hariLibur = Array.from(document.querySelectorAll('.hariLiburChk:checked')).map(el => Number(el.value));
+
+        if (instansiTarget === 'all') {
+            Swal.fire('Pilih Instansi', 'Silakan pilih instansi terlebih dahulu pada dropdown filter di atas.', 'warning');
+            return;
+        }
+
+        Swal.fire({ title: 'Memproses Rekap...', text: 'Sedang merekap data absensi bulanan...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+        google.script.run
+            .withSuccessHandler(res => {
+                Swal.close();
+                if (res.status === 'success') {
+                    // FIX: Bangun file .xlsx di browser dari data yang dikembalikan backend,
+                    // lalu langsung diunduh -- TIDAK ditulis ke Google Sheets.
+                    try {
+                        const ws = XLSX.utils.aoa_to_sheet([res.headers, ...res.rows]);
+                        
+                        // 1. Atur Lebar Kolom
+                        const wscols = [
+                            { wch: 5 },  // No
+                            { wch: 30 }  // Nama Karyawan
+                        ];
+                        // Kolom Tanggal (1-28/31)
+                        for(let i = 0; i < res.info.jumlahHariBulan; i++) {
+                            wscols.push({ wch: 4 }); 
+                        }
+                        // Kolom Jml H, S, I, Hari Kerja, Prosentase
+                        wscols.push({ wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 10 }, { wch: 12 });
+                        ws['!cols'] = wscols;
+
+                        // 2. Terapkan Styling pada Cell
+                        const range = XLSX.utils.decode_range(ws['!ref']);
+                        for (let R = range.s.r; R <= range.e.r; ++R) {
+                            for (let C = range.s.c; C <= range.e.c; ++C) {
+                                const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                                if (!ws[cellRef]) continue;
+
+                                // Default Alignment (Tengah)
+                                let align = { vertical: "center", horizontal: "center" };
+                                // Nama Karyawan rata kiri
+                                if (C === 1 && R > 0) align.horizontal = "left"; 
+
+                                if (R === 0) { 
+                                    // Style untuk Header (Hijau Gelap)
+                                    ws[cellRef].s = {
+                                        font: { bold: true, color: { rgb: "FFFFFF" } },
+                                        fill: { fgColor: { rgb: "006633" } },
+                                        alignment: align,
+                                        border: { 
+                                            top: {style:'thin'}, bottom: {style:'thin'}, 
+                                            left: {style:'thin'}, right: {style:'thin'} 
+                                        }
+                                    };
+                                } else { 
+                                    // Style untuk Baris Data
+                                    let fontStyle = { color: { rgb: "000000" } };
+                                    
+                                    // Tanda Silang Merah untuk Hari Libur
+                                    if (ws[cellRef].v === "X") {
+                                        fontStyle = { bold: true, color: { rgb: "FF0000" } }; 
+                                    }
+
+                                    ws[cellRef].s = {
+                                        font: fontStyle,
+                                        alignment: align,
+                                        border: { 
+                                            top: {style:'thin', color:{rgb:'CCCCCC'}}, 
+                                            bottom: {style:'thin', color:{rgb:'CCCCCC'}}, 
+                                            left: {style:'thin', color:{rgb:'CCCCCC'}}, 
+                                            right: {style:'thin', color:{rgb:'CCCCCC'}} 
+                                        }
+                                    };
+                                }
+                            }
+                        }
+
+                        const wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, ws, "Rekap");
+                        const safeFileName = String(res.fileName).replace(/[^\w\s-]/gi, "_") + ".xlsx";
+                        XLSX.writeFile(wb, safeFileName);
+                        Swal.fire({ icon: 'success', title: 'Rekap Berhasil Diunduh!', text: res.msg, confirmButtonText: 'OK' });
+                    } catch (buildErr) {
+                        Swal.fire('Error', 'Gagal membuat file unduhan: ' + buildErr.toString(), 'error');
+                    }
+                } else {
+                    Swal.fire('Gagal!', res.msg, 'error');
+                }
+            })
+            .withFailureHandler(err => {
+                Swal.close();
+                Swal.fire('Error', err.toString(), 'error');
+            })
+            .generateRekapBulanan(instansiTarget, bulan, tahun, hariLibur);
+    }
+
+    // ================= REKAP TAB: LAPORAN BULANAN BERGRAFIK (INLINE, SIAP CETAK) =================
+    let chartPieObj = null, chartBarObj = null, chartLineObj = null;
+
+    function tampilkanRekap() {
+        const instansiTarget = document.getElementById('rekapInstansi').value;
+        const bulan  = document.getElementById('rekapBulan').value;
+        const tahun  = document.getElementById('rekapTahun').value;
+        const hariLibur = Array.from(document.querySelectorAll('.rekapLiburChk:checked')).map(el => Number(el.value));
+
+        if (!instansiTarget) {
+            Swal.fire('Pilih Instansi', 'Silakan pilih instansi terlebih dahulu.', 'warning');
+            return;
+        }
+
+        Swal.fire({ title: 'Menyiapkan Rekap...', text: 'Mengambil & mengolah data absensi...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+        google.script.run
+            .withSuccessHandler(res => {
+                Swal.close();
+                if (res.status === 'success') {
+                    renderRekapInline(res);
+                } else {
+                    Swal.fire('Gagal!', res.msg, 'error');
+                }
+            })
+            .withFailureHandler(err => {
+                Swal.close();
+                Swal.fire('Error', err.toString(), 'error');
+            })
+            .generateRekapBulanan(instansiTarget, bulan, tahun, hariLibur);
+    }
+
+    function renderRekapInline(res) {
+        const { headers, rows, info } = res;
+        const jumlahHari = info.jumlahHariBulan;
+
+        const idxH = headers.indexOf('Jml H');
+        const idxS = headers.indexOf('Jml S');
+        const idxI = headers.indexOf('Jml I');
+
+        const namaKaryawan = rows.map(r => r[1]);
+        const jmlH = rows.map(r => Number(r[idxH]));
+        const jmlS = rows.map(r => Number(r[idxS]));
+        const jmlI = rows.map(r => Number(r[idxI]));
+        const prosentase = rows.map(r => parseFloat(r[headers.length - 1]) || 0);
+
+        const totalH = jmlH.reduce((a,b) => a+b, 0);
+        const totalS = jmlS.reduce((a,b) => a+b, 0);
+        const totalI = jmlI.reduce((a,b) => a+b, 0);
+        const totalSlotKerja = info.totalHariKerja * rows.length;
+        const totalAlpa = Math.max(totalSlotKerja - totalH - totalS - totalI, 0);
+
+        const labelTanggal = [];
+        const trenHadir = [];
+        for (let d = 1; d <= jumlahHari; d++) {
+            labelTanggal.push(d);
+            const colIdx = headers.indexOf(String(d));
+            let hCount = 0;
+            rows.forEach(r => { if (String(r[colIdx]).includes('H')) hCount++; });
+            trenHadir.push(hCount);
+        }
+
+        const rataProsentase = prosentase.length ? (prosentase.reduce((a,b)=>a+b,0) / prosentase.length).toFixed(1) : 0;
+
+        // --- Tampilkan area konten, sembunyikan placeholder ---
+        document.getElementById('rekapEmpty').classList.add('hidden');
+        document.getElementById('rekapContent').classList.remove('hidden');
+        document.getElementById('btnCetakRekap').classList.remove('hidden');
+
+        document.getElementById('rekapSubInfo').innerText =
+            `${info.instansi} — ${info.bulan} ${info.tahun} · Hari kerja: ${info.totalHariKerja} dari ${info.jumlahHariBulan} hari (libur: ${info.jumlahHariLibur}) · ${info.jumlahKaryawan} karyawan`;
+        document.getElementById('rekapPrintedAt').innerText = 'Dicetak: ' + new Date().toLocaleString('id-ID');
+
+        document.getElementById('kpiHadir').innerText = totalH;
+        document.getElementById('kpiSakit').innerText = totalS;
+        document.getElementById('kpiIzin').innerText = totalI;
+        document.getElementById('kpiRata').innerText = rataProsentase + '%';
+
+        // --- Tabel detail ---
+        document.getElementById('rekapTableBody').innerHTML = rows.map((r,i) => `
+            <tr class="${i % 2 === 1 ? 'bg-slate-50' : ''}">
+                <td class="p-2 border text-center">${i+1}</td>
+                <td class="p-2 border font-semibold">${r[1]}</td>
+                <td class="p-2 border text-center">${r[idxH]}</td>
+                <td class="p-2 border text-center">${r[idxS]}</td>
+                <td class="p-2 border text-center">${r[idxI]}</td>
+                <td class="p-2 border text-center">${info.totalHariKerja}</td>
+                <td class="p-2 border text-center font-bold">${r[headers.length-1]}</td>
+            </tr>`).join('');
+
+        // --- Hancurkan chart lama sebelum render ulang ---
+        if (chartPieObj) chartPieObj.destroy();
+        if (chartBarObj) chartBarObj.destroy();
+        if (chartLineObj) chartLineObj.destroy();
+
+        chartPieObj = new Chart(document.getElementById('chartPie'), {
+            type: 'pie',
+            data: {
+                labels: ['Hadir', 'Sakit', 'Izin', 'Tanpa Keterangan'],
+                datasets: [{ data: [totalH, totalS, totalI, totalAlpa],
+                    backgroundColor: ['#059669','#f59e0b','#3b82f6','#ef4444'] }]
+            },
+            options: { plugins: { legend: { position: 'bottom', labels:{ font:{size:11} } } }, maintainAspectRatio: true }
+        });
+
+        chartBarObj = new Chart(document.getElementById('chartBar'), {
+            type: 'bar',
+            data: {
+                labels: namaKaryawan,
+                datasets: [{ label: '% Kehadiran', data: prosentase, backgroundColor: '#065f46', borderRadius: 4 }]
+            },
+            options: {
+                indexAxis: 'y',
+                scales: { x: { max: 100, ticks: { callback: v => v + '%' } } },
+                plugins: { legend: { display:false } },
+                maintainAspectRatio: true
+            }
+        });
+
+        chartLineObj = new Chart(document.getElementById('chartLine'), {
+            type: 'line',
+            data: {
+                labels: labelTanggal,
+                datasets: [{ label: 'Jumlah Hadir', data: trenHadir, borderColor: '#065f46',
+                    backgroundColor: 'rgba(6,95,70,0.1)', fill: true, tension: 0.3, pointRadius: 3 }]
+            },
+            options: { plugins: { legend: { display:false } }, scales: { y: { beginAtZero:true, ticks:{stepSize:1} } }, maintainAspectRatio: true }
+        });
+    }
+
+
+    function exportExcel() {
+        const filterVal = document.getElementById('filterLogInstansi').value;
+        const list = filterVal === 'all' ? db.logs : db.logs.filter(r => r[1] === filterVal);
+        // FIX: Tambah header yang sesuai kolom tabel
+        const ws = XLSX.utils.aoa_to_sheet([
+            ["Timestamp", "Instansi", "Nama", "Sesi", "Status", "Keterangan", "Lokasi", "Link Foto", "Link Dokumen"],
+            ...list
+        ]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Rekap");
+        const fileName = filterVal === 'all' ? 'Rekap_Presensi_Semua.xlsx' : `Rekap_Presensi_${filterVal}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    }
+    </script>
+</body>
+</html>
